@@ -10,6 +10,8 @@
     "build": "node scripts/build-selfhost.mjs",
     "start": "node --env-file-if-exists=.env selfhost-dist/server.mjs",
     "dev": "npm run build && node --env-file-if-exists=.env selfhost-dist/server.mjs",
+    "demo": "node scripts/demo.mjs",
+    "screenshots": "node scripts/screenshots.mjs",
     "test": "node tests/selfhost.mjs && node tests/accounts.mjs && node tests/spaces.mjs",
     "typecheck": "tsc --noEmit",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern selfhost-dist",

@@ -17,6 +17,24 @@ shared journal for couples, and an optional AI coach. One Node server, one SQLit
   model (Ollama, llama.cpp, LM Studio, Groq, OpenRouter, OpenAI, Gemini) or a local llama.cpp model.
 - **Works like an app:** add it to your home screen, get push notifications, keep using it offline and sync later.
 
+## Screenshots
+
+![Today: the day's goals, the energy meter, the coach's "right now" line and both partners' moods](docs/screenshots/today.jpg)
+
+| Shared journal | Memory map |
+|---|---|
+| ![The shared journal with countdowns: a birthday, a trip and an anniversary](docs/screenshots/journal.jpg) | ![Memories on a map of where they happened](docs/screenshots/journal-map.jpg) |
+| **Progress** | **Profile and partner** |
+| ![Progress: today's advice and the week per goal](docs/screenshots/progress.jpg) | ![Profile: the relationship card and the couple's stats](docs/screenshots/profile.jpg) |
+
+<p align="center">
+  <img src="docs/screenshots/mobile-today.jpg" width="260" alt="Today on a phone">
+  &nbsp;&nbsp;
+  <img src="docs/screenshots/mobile-journal.jpg" width="260" alt="The journal on a phone">
+</p>
+
+All example data (two partners, Alex and Sam). Run `npm run demo` to click around it yourself.
+
 ## Quick start (Docker)
 
 ```bash
@@ -110,6 +128,7 @@ docker compose stop && docker run --rm -v maximum-overdrive_max-data:/data -v "$
 
 ```bash
 npm run dev          # build, then start with .env
+npm run demo         # a throwaway server full of example data (http://localhost:4340)
 npm test             # end-to-end tests against a real server and database (no mocks)
 npm run typecheck
 ```
@@ -122,6 +141,8 @@ Layout:
   `accounts.mjs` sign-up and email, `spaces.mjs` journals and partners, `coach.mjs` the model, `mail.mjs` SMTP
 - `tests/`: `selfhost.mjs` (the app), `accounts.mjs` (sign-up and email), `spaces.mjs` (journals, partners, privacy)
 - `scripts/build-selfhost.mjs`: builds the app and bundles the server into `selfhost-dist/`
+- `scripts/demo.mjs`: example data for trying the app; `scripts/screenshots.mjs` retakes the README screenshots
+  from it (`npm run demo`, then `npm run screenshots`)
 
 ## Limits
 
