@@ -68,7 +68,7 @@ export function Journal({statColors,setStatColor,canVault=false,solo=false,share
  const deleteMemory=async(id:string)=>{if(await deleteToBin(mutate,'memory',id,me.username,{title:'Delete this memory?',body:'It moves to Recently deleted for 30 days. Its photos stay in the Photo Dump.'}))setOpen(null)};
  const deleteMoment=async(id:string)=>{if(await deleteToBin(mutate,'milestone',id,me.username,{title:'Delete this milestone?'}))setMoment(null)};
  const [dumpOpen,setDumpOpen]=useState(false),dump=shared.photoDump??[],dumpPreview=dump.filter(p=>!p.sensitive).slice(0,10);
- // Server moves the file into Max's hidden photos first; then it leaves the shared dump and every memory.
+ // Server moves the file into the photo admin's hidden photos first; then it leaves the shared dump and every memory.
  const hideToVault=async(p:DumpPhoto)=>{try{const r=await fetch('./api/vault/move',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:p.id})});const data=await r.json().catch(()=>({})) as {error?:string};if(!r.ok)throw Error(data.error??'Could not move the photo.');
   mutate(s=>{s.photoDump=(s.photoDump??[]).filter(x=>x.id!==p.id);for(const e of [...s.journal,...(s.journalTrash??[]).flatMap(t=>t.memory?[t.memory]:[])])if(e.photos.some(x=>x.id===p.id))e.photos=e.photos.filter(x=>x.id!==p.id)});
   void caches?.open('max-photos').then(c=>c.delete(new URL(photoSrc(p),document.baseURI).href)).catch(()=>{});

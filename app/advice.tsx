@@ -2,7 +2,7 @@
 import {useEffect,useRef,useState} from 'react';
 import {Sun} from 'lucide-react';
 
-// Today's advice, at the top of Progress. Written fresh at 6 am (by Coach MAX for Max, from your own numbers
+// Today's advice, at the top of Progress. Written fresh at 6 am (by the coach for accounts that have it, from your own numbers
 // otherwise); if it isn't ready yet, Coach MAX writes it now and this checks back until it is.
 type Advice={day:string;text?:string;source?:'coach'|'rules';pending?:boolean};
 export function AdviceCard({focus}:{focus?:number}){

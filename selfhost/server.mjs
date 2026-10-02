@@ -358,7 +358,7 @@ function coachPrompt(user,t=coachToday(user),logged=[]){
   if(soon.length)facts.push(`Coming up: ${soon.join('; ')}.`)}
  {const m=db.prepare('SELECT mood,note,at FROM moods WHERE username=? ORDER BY at DESC LIMIT 1').get(user.username);if(m&&Date.now()-m.at<18*3600000)facts.push(`Latest mood: ${moodOf(m.mood).label}${m.note?` ("${m.note.slice(0,120)}")`:''}.`)}
  if(logged.length)facts.push(`Just logged from their message: ${logged.join('; ')}.`);
- // The person is called Max and the coach M.A.X.: a 3B model mixes them up unless told plainly (the reply is also cleaned up).
+ // The coach is called M.A.X. and a user may be called Max too: a small model mixes them up unless told plainly (the reply is also cleaned up).
  return `You are the coach inside ${name}'s habits app (the app calls you "M.A.X."). The person you're talking to is ${name}; call them ${name}, never "M.A.X.". Talk like a caring older brother: warm, direct, a bit playful. `+
   `Keep them accountable and get them to log what they did. Reply in 2-3 short sentences, one question at most. `+
   `Use only the TODAY facts, never invent numbers. Praise one specific win, then nudge one open goal with a small next step. `+
@@ -567,7 +567,7 @@ const server=createServer(async(req,res)=>{
     const current=db.prepare('SELECT revision FROM shared WHERE id=?').get(space);
     if((current?.revision??0)!==payload.revision)return json(res,409,{error:'The journal changed. Getting the latest version…'});
     const before=(()=>{try{return JSON.parse(db.prepare('SELECT data FROM shared WHERE id=?').get(space)?.data??'null')}catch{return null}})();
-    // Only photo admins (Max) can put photos in Recently deleted, stamped with their own name and a recent time
+    // Only photo admins can put photos in Recently deleted, stamped with their own name and a recent time
     // (up to a week old, for deletes made offline; never in the future).
     const oldTrash=new Set((before?.photoTrash??[]).map(p=>p.id));
     for(const p of result.data.photoTrash??[])if(!oldTrash.has(p.id)&&(p.deletedBy!==user.username||!(Date.parse(p.deletedAt)<=Date.now()+3600000&&Date.parse(p.deletedAt)>=Date.now()-7*86400000)))return json(res,403,{error:'Please try deleting that again.'});
@@ -738,7 +738,7 @@ const server=createServer(async(req,res)=>{
     const controller=new AbortController();let gone=false;res.on('close',()=>{gone=true});
     res.writeHead(200,{'Content-Type':'text/event-stream','Cache-Control':'no-store','X-Accel-Buffering':'no'});
     const send=e=>{if(gone)return;try{res.write(`data: ${JSON.stringify(e)}\n\n`)}catch{}};
-    // "Max" talks to "M.A.X.": the model sometimes calls them M.A.X., so that is swapped for their name as it streams.
+    // The model sometimes calls the user "M.A.X." (its own name), so that is swapped for their name as it streams.
     const name=user.displayName||user.username,clean=t=>t.replace(/M\.A\.X\.?/g,name);let raw='',sent='';
     const onToken=piece=>{raw+=piece;let out=clean(raw);const tail=['M.A.X','M.A.','M.A','M.','M'].find(x=>out.endsWith(x));if(tail)out=out.slice(0,-tail.length);if(out.length>sent.length&&out.startsWith(sent)){send({type:'token',text:out.slice(sent.length)});sent=out}};
     try{

@@ -4,7 +4,7 @@ import {Sparkles} from 'lucide-react';
 
 // A quick insight about right now, under Today's cards. Asked for when the app opens, when you come back after 5+ minutes
 // away, and a few seconds after your progress changes (so it never talks about goals you've since finished). Tap the
-// sparkle for a new one, once every 2 minutes. Coach MAX writes it for Max; the rest get it from their numbers.
+// sparkle for a new one, once every 2 minutes. The coach writes it for accounts that have it; the rest get it from their numbers.
 type Insight={text:string;source:'coach'|'rules';at:number;progress:string};
 const KEY='max-insight',NEXT_KEY='max-insight-next',STALE=30*60000,AWAY=5*60000,COOLDOWN=2*60000;
 const cached=(progress:string):Insight|null=>{try{const v=JSON.parse(sessionStorage.getItem(KEY)??'null') as Insight|null;return v&&v.progress===progress&&Date.now()-v.at<STALE?v:null}catch{return null}};

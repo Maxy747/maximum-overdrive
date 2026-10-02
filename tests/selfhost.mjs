@@ -17,7 +17,7 @@ let coachSeen=null,extractSeen=null,coachAuth=null;const fakeAssistant=createSer
  if(body.response_format){extractSeen=body;const props=body.response_format.json_schema.schema.properties,labels=props.did.items.enum,out={did:labels.filter(l=>/^(Push-ups|Breakfast|Dinner)$/.test(l))};if(props.exercise)out.exercise=[{name:'Push-ups',reps:15,sets:2}];for(const k of Object.keys(props))if(!(k in out))out[k]=0;res.writeHead(200,{'Content-Type':'application/json'});return res.end(JSON.stringify({choices:[{message:{content:JSON.stringify(out)}}]}))}
  coachSeen=body;res.writeHead(200,{'Content-Type':'text/event-stream'});for(const piece of /name test/.test(body.messages.at(-1).content)?['Great job M.A','.X. keep going']:['Nice work ','today.'])res.write('data: '+JSON.stringify({choices:[{delta:{content:piece}}]})+'\n\n');res.end('data: [DONE]\n\n')})});
 await new Promise(ok=>fakeAssistant.listen(4319,'127.0.0.1',ok));
-const PASSWORDS={max:'test-pass-max-1',sam:'test-pass-sam-1'};
+const PASSWORDS={robin:'test-pass-robin-1',sam:'test-pass-sam-1'};
 let child;
 
 function run(args,input){return new Promise(done=>{const p=spawn(process.execPath,['selfhost-dist/server.mjs',...args],{env,stdio:['pipe','pipe','pipe']});let out='';p.stdout.on('data',d=>out+=d);p.stderr.on('data',d=>out+=d);p.on('exit',code=>done({code,out}));p.stdin.end(input)})}
@@ -35,12 +35,12 @@ const form=(name,bytes,type)=>{const f=new FormData();f.append('file',new File([
 
 try{
  // accounts are created from the command line; passwords are hashed, never stored as given
- assert.equal((await run(['set-password','max','Max'],`${PASSWORDS.max}\n${PASSWORDS.max}\n`)).code,0);
+ assert.equal((await run(['set-password','robin','Robin'],`${PASSWORDS.robin}\n${PASSWORDS.robin}\n`)).code,0);
  assert.equal((await run(['set-password','sam','Sam'],`${PASSWORDS.sam}\n${PASSWORDS.sam}\n`)).code,0);
  assert.equal((await run(['set-password','mismatch'],'one-password\nanother-one\n')).code,1);
  assert.equal((await run(['set-password','short'],'short\nshort\n')).code,1);
- assert.equal((await run(['set-passwords','max','sam'],'shared-pass-1\nshared-pass-1\n')).code,0,'one password for both');
- assert.equal((await run(['set-password','max'],`${PASSWORDS.max}\n${PASSWORDS.max}\n`)).code,0);assert.equal((await run(['set-password','sam'],`${PASSWORDS.sam}\n${PASSWORDS.sam}\n`)).code,0);
+ assert.equal((await run(['set-passwords','robin','sam'],'shared-pass-1\nshared-pass-1\n')).code,0,'one password for both');
+ assert.equal((await run(['set-password','robin'],`${PASSWORDS.robin}\n${PASSWORDS.robin}\n`)).code,0);assert.equal((await run(['set-password','sam'],`${PASSWORDS.sam}\n${PASSWORDS.sam}\n`)).code,0);
  await start();
  const page=await (await api('/')).text();
  assert.ok(page.includes(`<base href="${env.MAX_BASE_PATH}/">`),'HTML anchors assets even when the proxy strips the mount path');
@@ -49,122 +49,122 @@ try{
  assert.equal((await fetch(origin+'/api/accounts')).status,401,'no Tailscale identity');
  assert.equal((await api('/api/state',{headers:{'Tailscale-User-Login':'stranger@example.test'}})).status,401);
  assert.equal((await api('/api/state')).status,401,'no session');
- assert.deepEqual((await (await api('/api/accounts')).json()).accounts.map(a=>a.username),['max','sam']);
- assert.equal((await login('max','wrong-password')).r.status,401);
- assert.equal((await api('/api/login',{method:'POST',body:{username:'max',password:PASSWORDS.max},headers:{Origin:'https://untrusted.test'}})).status,403);
- const max=await login('max',PASSWORDS.max,true),sam=await login('sam',PASSWORDS.sam,false);
- assert.equal(max.r.status,200);assert.equal(sam.r.status,200);
- assert.match(max.setCookie,/HttpOnly/);assert.match(max.setCookie,/SameSite=Strict/);assert.match(max.setCookie,/Max-Age=15552000/,'stay logged in');
+ assert.deepEqual((await (await api('/api/accounts')).json()).accounts.map(a=>a.username),['robin','sam']);
+ assert.equal((await login('robin','wrong-password')).r.status,401);
+ assert.equal((await api('/api/login',{method:'POST',body:{username:'robin',password:PASSWORDS.robin},headers:{Origin:'https://untrusted.test'}})).status,403);
+ const robin=await login('robin',PASSWORDS.robin,true),sam=await login('sam',PASSWORDS.sam,false);
+ assert.equal(robin.r.status,200);assert.equal(sam.r.status,200);
+ assert.match(robin.setCookie,/HttpOnly/);assert.match(robin.setCookie,/SameSite=Strict/);assert.match(robin.setCookie,/Max-Age=15552000/,'stay logged in');
  assert.doesNotMatch(sam.setCookie,/Max-Age/,'session cookie when not remembered');
 
  // Partners: nobody is paired until one invites and the other enters the code.
- assert.equal((await (await api('/api/pair',{cookie:max.cookie})).json()).partner,null,'solo until paired');
- assert.deepEqual((await (await api('/api/users',{cookie:max.cookie})).json()).users.map(u=>u.username),['max'],'only you before pairing');
- const inv=await (await api('/api/pair/invite',{cookie:max.cookie,method:'POST'})).json();assert.match(inv.code,/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
- assert.equal((await api('/api/pair/accept',{cookie:max.cookie,method:'POST',body:{code:inv.code}})).status,400,'not your own code');
+ assert.equal((await (await api('/api/pair',{cookie:robin.cookie})).json()).partner,null,'solo until paired');
+ assert.deepEqual((await (await api('/api/users',{cookie:robin.cookie})).json()).users.map(u=>u.username),['robin'],'only you before pairing');
+ const inv=await (await api('/api/pair/invite',{cookie:robin.cookie,method:'POST'})).json();assert.match(inv.code,/^[0-9A-Z]{4}-[0-9A-Z]{4}$/);
+ assert.equal((await api('/api/pair/accept',{cookie:robin.cookie,method:'POST',body:{code:inv.code}})).status,400,'not your own code');
  assert.equal((await api('/api/pair/accept',{cookie:sam.cookie,method:'POST',body:{code:'ZZZZ-ZZZZ'}})).status,400);
- assert.equal((await (await api('/api/pair/preview',{cookie:sam.cookie,method:'POST',body:{code:inv.code.toLowerCase().replace('-',' ')}})).json()).from.displayName,'Max','codes ignore case and spacing');
+ assert.equal((await (await api('/api/pair/preview',{cookie:sam.cookie,method:'POST',body:{code:inv.code.toLowerCase().replace('-',' ')}})).json()).from.displayName,'Robin','codes ignore case and spacing');
  assert.equal((await api('/api/pair/accept',{cookie:sam.cookie,method:'POST',body:{code:inv.code}})).status,200);
- assert.equal((await (await api('/api/pair',{cookie:max.cookie})).json()).partner.username,'sam');
+ assert.equal((await (await api('/api/pair',{cookie:robin.cookie})).json()).partner.username,'sam');
  assert.equal((await api('/api/pair/accept',{cookie:sam.cookie,method:'POST',body:{code:inv.code}})).status,400,'a code works once');
- assert.equal((await api('/api/pair/invite',{cookie:max.cookie,method:'POST'})).status,409,'no invites while paired');
- assert.equal((await (await api('/api/me',{cookie:max.cookie})).json()).user.displayName,'Max');
+ assert.equal((await api('/api/pair/invite',{cookie:robin.cookie,method:'POST'})).status,409,'no invites while paired');
+ assert.equal((await (await api('/api/me',{cookie:robin.cookie})).json()).user.displayName,'Robin');
 
  // per-account trackers
- const initial=await (await api('/api/state',{cookie:max.cookie})).json();assert.equal(initial.revision,0);
+ const initial=await (await api('/api/state',{cookie:robin.cookie})).json();assert.equal(initial.revision,0);
  const s=initial.state,k=dayKey();s.days[k]=dayFor(s,k);s.days[k].entries[0].checks=[true,true,true];s.days[k].entries[0].exerciseLogs={'0':{reps:12,sets:3}};s.days[k].entries[0].note='Completed the workout and logged the details.';
  const update={state:s,revision:0};
- assert.equal((await api('/api/state',{cookie:max.cookie,method:'PUT',body:update,headers:{Origin:'https://untrusted.test'}})).status,403);
- assert.equal((await api('/api/state',{cookie:max.cookie,method:'PUT',body:update})).status,200);
- assert.equal((await api('/api/state',{cookie:max.cookie,method:'PUT',body:update})).status,409);
- assert.equal((await api('/api/state',{cookie:max.cookie,method:'POST',body:{invalid:true}})).status,400);
+ assert.equal((await api('/api/state',{cookie:robin.cookie,method:'PUT',body:update,headers:{Origin:'https://untrusted.test'}})).status,403);
+ assert.equal((await api('/api/state',{cookie:robin.cookie,method:'PUT',body:update})).status,200);
+ assert.equal((await api('/api/state',{cookie:robin.cookie,method:'PUT',body:update})).status,409);
+ assert.equal((await api('/api/state',{cookie:robin.cookie,method:'POST',body:{invalid:true}})).status,400);
  const legacy={...initialState(),projects:[{id:'p',name:'Old',tasks:[],notes:'',links:[],files:[],activity:[]}],captures:[]};
- const restored=await api('/api/state',{cookie:max.cookie,method:'POST',body:legacy});assert.equal(restored.status,200,'old backups still import');assert.equal((await restored.json()).projects,undefined);
+ const restored=await api('/api/state',{cookie:robin.cookie,method:'POST',body:legacy});assert.equal(restored.status,200,'old backups still import');assert.equal((await restored.json()).projects,undefined);
  const samState=await (await api('/api/state',{cookie:sam.cookie})).json();
  assert.equal(samState.revision,0,'accounts do not share trackers');assert.equal(samState.state.settings.name,'Sam');
 
- const diary={id:'diary-test',title:'Imported diary',body:'A long note. '.repeat(5000),date:k,author:'max',created:new Date().toISOString(),updated:new Date().toISOString()};
+ const diary={id:'diary-test',title:'Imported diary',body:'A long note. '.repeat(5000),date:k,author:'robin',created:new Date().toISOString(),updated:new Date().toISOString()};
  // shared journal: both read it, stale writes are rejected
- const entry={id:'e1',title:'Beach day',body:'We walked for hours.',date:k,time:'16:35',location:'Lisbon',photos:[],author:'max',created:new Date().toISOString()};
+ const entry={id:'e1',title:'Beach day',body:'We walked for hours.',date:k,time:'16:35',location:'Lisbon',photos:[],author:'robin',created:new Date().toISOString()};
  const moment={id:'m1',title:'First trip together',icon:'💍',date:'2025-04-11',time:'16:35',color:'purple'};
- assert.equal((await api('/api/shared',{cookie:max.cookie,method:'PUT',body:{shared:{diary:[diary],journal:[entry],moments:[moment],together:'2025-01-05',photoDump:[{id:'p1',name:'dump.jpg',size:10,sensitive:true}]},revision:0}})).status,200);
+ assert.equal((await api('/api/shared',{cookie:robin.cookie,method:'PUT',body:{shared:{diary:[diary],journal:[entry],moments:[moment],together:'2025-01-05',photoDump:[{id:'p1',name:'dump.jpg',size:10,sensitive:true}]},revision:0}})).status,200);
  const seen=await (await api('/api/shared',{cookie:sam.cookie})).json();assert.equal(seen.revision,1);assert.equal(seen.shared.journal[0].title,'Beach day');assert.equal(seen.shared.photoDump[0].sensitive,true);assert.deepEqual(seen.shared.diary,[diary],'long diary text is preserved and readable by partner');
  assert.equal((await api('/api/shared',{cookie:sam.cookie,method:'PUT',body:{shared:{journal:[],moments:[]},revision:0}})).status,409);
  assert.equal((await api('/api/shared',{cookie:sam.cookie,method:'PUT',body:{shared:{journal:[{...entry,photos:'bad'}],moments:[]},revision:1}})).status,400);
  const comment={id:'c1',author:'sam',text:'I love this day',created:new Date().toISOString()};
  assert.equal((await api('/api/shared',{cookie:sam.cookie,method:'PUT',body:{shared:{...seen.shared,journal:[{...entry,comments:[{...comment,text:''}]}]},revision:1}})).status,400,'empty comment rejected');
  assert.equal((await api('/api/shared',{cookie:sam.cookie,method:'PUT',body:{shared:{...seen.shared,diary:[{...diary,title:'Edited by partner'}],journal:[{...entry,comments:[comment]}]},revision:1}})).status,200);
- assert.equal((await (await api('/api/shared',{cookie:max.cookie})).json()).shared.journal[0].comments[0].text,'I love this day');
+ assert.equal((await (await api('/api/shared',{cookie:robin.cookie})).json()).shared.journal[0].comments[0].text,'I love this day');
 
- assert.equal((await (await api('/api/shared',{cookie:max.cookie})).json()).shared.diary[0].title,'Edited by partner','partner diary edits persist');
+ assert.equal((await (await api('/api/shared',{cookie:robin.cookie})).json()).shared.diary[0].title,'Edited by partner','partner diary edits persist');
  // files: private by default, shared when uploaded for the journal, images only inline
- const privateFile=await (await api('/api/files',{cookie:max.cookie,method:'POST',body:form('test.txt','MAX attachment test','text/plain')})).json();
- assert.equal(await (await api('/api/files?id='+privateFile.id,{cookie:max.cookie})).text(),'MAX attachment test');
- assert.equal((await api('/api/files?id='+privateFile.id+'&inline=1',{cookie:max.cookie})).headers.get('content-type'),'application/octet-stream');
+ const privateFile=await (await api('/api/files',{cookie:robin.cookie,method:'POST',body:form('test.txt','MAX attachment test','text/plain')})).json();
+ assert.equal(await (await api('/api/files?id='+privateFile.id,{cookie:robin.cookie})).text(),'MAX attachment test');
+ assert.equal((await api('/api/files?id='+privateFile.id+'&inline=1',{cookie:robin.cookie})).headers.get('content-type'),'application/octet-stream');
  assert.equal((await api('/api/files?id='+privateFile.id,{cookie:sam.cookie})).status,404,'other account cannot read private files');
- const sharedPhoto=await (await api('/api/files?shared=1',{cookie:max.cookie,method:'POST',body:form('dot.png',png,'image/png')})).json();
+ const sharedPhoto=await (await api('/api/files?shared=1',{cookie:robin.cookie,method:'POST',body:form('dot.png',png,'image/png')})).json();
  const inline=await api('/api/files?id='+sharedPhoto.id+'&inline=1',{cookie:sam.cookie});
  assert.equal(inline.status,200);assert.equal(inline.headers.get('content-type'),'image/png');assert.equal(inline.headers.get('content-disposition'),'inline');
 
  // profile photos (also settable from the command line)
  writeFileSync(join(dataDir,'cli.png'),png);writeFileSync(join(dataDir,'bad.png'),'not an image');
- assert.equal((await run(['set-avatar','max',join(dataDir,'bad.png')])).code,1);
- assert.equal((await run(['set-avatar','max',join(dataDir,'cli.png')])).code,0);
- assert.ok((await (await api('/api/me',{cookie:max.cookie})).json()).user.avatar,'cli avatar set');
+ assert.equal((await run(['set-avatar','robin',join(dataDir,'bad.png')])).code,1);
+ assert.equal((await run(['set-avatar','robin',join(dataDir,'cli.png')])).code,0);
+ assert.ok((await (await api('/api/me',{cookie:robin.cookie})).json()).user.avatar,'cli avatar set');
  assert.equal((await api('/api/profile/avatar',{cookie:sam.cookie,method:'POST',body:form('fake.png','not an image','image/png')})).status,400);
  const avatar=await (await api('/api/profile/avatar',{cookie:sam.cookie,method:'POST',body:form('me.png',png,'image/png')})).json();
- const users=(await (await api('/api/users',{cookie:max.cookie})).json()).users;
+ const users=(await (await api('/api/users',{cookie:robin.cookie})).json()).users;
  assert.equal(users.find(u=>u.username==='sam').avatar,avatar.user.avatar);
- assert.equal((await api('/api/files?id='+avatar.user.avatar+'&inline=1',{cookie:max.cookie})).headers.get('content-type'),'image/png');
+ assert.equal((await api('/api/files?id='+avatar.user.avatar+'&inline=1',{cookie:robin.cookie})).headers.get('content-type'),'image/png');
  const accountList=(await (await api('/api/accounts')).json()).accounts;assert.ok(accountList.find(a=>a.username==='sam').avatarVersion,'login screen knows there is a photo');
  assert.equal((await api('/api/accounts/avatar?u=sam')).headers.get('content-type'),'image/png','profile photo visible on the login screen');
  assert.equal((await fetch(origin+'/api/accounts/avatar?u=sam')).status,401,'still behind the Tailscale gate');
  assert.equal((await api('/api/accounts/avatar?u=nobody')).status,404);
 
  // daily couple prompt: answer on your own, partner's answer unlocks after yours, only today is writable
- const daily=await (await api('/api/daily',{cookie:max.cookie})).json();
+ const daily=await (await api('/api/daily',{cookie:robin.cookie})).json();
  assert.equal(daily.date,daily.today);assert.ok(daily.question&&daily.task);
- assert.equal((await api('/api/daily',{cookie:max.cookie,method:'PUT',body:{date:daily.today,answer:'Coffee by the sea',taskDone:true}})).status,200);
- const lockedView=(await (await api('/api/daily',{cookie:sam.cookie})).json()).partners.find(p=>p.username==='max');
+ assert.equal((await api('/api/daily',{cookie:robin.cookie,method:'PUT',body:{date:daily.today,answer:'Coffee by the sea',taskDone:true}})).status,200);
+ const lockedView=(await (await api('/api/daily',{cookie:sam.cookie})).json()).partners.find(p=>p.username==='robin');
  assert.equal(lockedView.answered,true);assert.equal(lockedView.answer,null,'hidden until sam answers');assert.equal(lockedView.taskDone,true);
  assert.equal((await api('/api/daily',{cookie:sam.cookie,method:'PUT',body:{date:daily.today,answer:42}})).status,400);
  assert.equal((await api('/api/daily',{cookie:sam.cookie,method:'PUT',body:{date:daily.today,answer:'Movie night'}})).status,200);
- assert.equal((await (await api('/api/daily',{cookie:sam.cookie})).json()).partners.find(p=>p.username==='max').answer,'Coffee by the sea');
- assert.equal((await (await api('/api/daily',{cookie:max.cookie})).json()).partners.find(p=>p.username==='sam').answer,'Movie night');
+ assert.equal((await (await api('/api/daily',{cookie:sam.cookie})).json()).partners.find(p=>p.username==='robin').answer,'Coffee by the sea');
+ assert.equal((await (await api('/api/daily',{cookie:robin.cookie})).json()).partners.find(p=>p.username==='sam').answer,'Movie night');
  assert.equal((await api('/api/daily',{cookie:sam.cookie,method:'PUT',body:{date:shiftDay(daily.today,-1),answer:'too late'}})).status,403);
  assert.equal((await api('/api/daily?date='+shiftDay(daily.today,1),{cookie:sam.cookie})).status,400);
  assert.equal((await (await api('/api/daily?date='+shiftDay(daily.today,-1),{cookie:sam.cookie})).json()).me.answer,'');
- const archiveDb=new DatabaseSync(join(dataDir,'max.sqlite'));archiveDb.prepare("INSERT INTO daily_archive(username,date,kind,text,created,source) VALUES('max','2025-03-03','answer','Mini pancakes','2025-03-03T11:57:58Z','Couple Joy')").run();archiveDb.close();
- const archived=await (await api('/api/daily?date=2025-03-03',{cookie:sam.cookie})).json();assert.equal(archived.archive.length,1);assert.equal(archived.archive[0].text,'Mini pancakes');assert.equal(archived.archive[0].displayName,'Max');
+ const archiveDb=new DatabaseSync(join(dataDir,'max.sqlite'));archiveDb.prepare("INSERT INTO daily_archive(username,date,kind,text,created,source) VALUES('robin','2025-03-03','answer','Mini pancakes','2025-03-03T11:57:58Z','Couple Joy')").run();archiveDb.close();
+ const archived=await (await api('/api/daily?date=2025-03-03',{cookie:sam.cookie})).json();assert.equal(archived.archive.length,1);assert.equal(archived.archive[0].text,'Mini pancakes');assert.equal(archived.archive[0].displayName,'Robin');
 
  // hidden photos vault: per person, PIN-locked, enforced on the server (not just hidden in the UI)
  const vaultCookie=r=>((r.headers.get('set-cookie')||'').match(/max_vault=[a-f0-9]+/)||[''])[0];
- assert.deepEqual(await (await api('/api/vault/status',{cookie:max.cookie})).json(),{hasPin:false,unlocked:false,journalLock:false});
- assert.equal((await api('/api/vault',{cookie:max.cookie})).status,403,'locked before any PIN');
- assert.equal((await api('/api/vault/pin',{cookie:max.cookie,method:'POST',body:{pin:'12ab'}})).status,400);
- assert.equal((await api('/api/vault/pin',{cookie:max.cookie,method:'POST',body:{pin:'482913'}})).status,200);
- assert.equal((await api('/api/vault/pin',{cookie:max.cookie,method:'POST',body:{pin:'000000',currentPin:'111111'}})).status,401,'changing the PIN needs the current one');
+ assert.deepEqual(await (await api('/api/vault/status',{cookie:robin.cookie})).json(),{hasPin:false,unlocked:false,journalLock:false});
+ assert.equal((await api('/api/vault',{cookie:robin.cookie})).status,403,'locked before any PIN');
+ assert.equal((await api('/api/vault/pin',{cookie:robin.cookie,method:'POST',body:{pin:'12ab'}})).status,400);
+ assert.equal((await api('/api/vault/pin',{cookie:robin.cookie,method:'POST',body:{pin:'482913'}})).status,200);
+ assert.equal((await api('/api/vault/pin',{cookie:robin.cookie,method:'POST',body:{pin:'000000',currentPin:'111111'}})).status,401,'changing the PIN needs the current one');
  // Everyone has their own hidden photos with their own PIN: Sam's starts empty and locked.
  assert.deepEqual(await (await api('/api/vault/status',{cookie:sam.cookie})).json(),{hasPin:false,unlocked:false,journalLock:false},'a separate vault per person');
- assert.equal((await api('/api/vault/unlock',{cookie:sam.cookie,method:'POST',body:{pin:'482913'}})).status,409,'Max’s PIN doesn’t open it');
- assert.equal((await api('/api/vault/unlock',{cookie:max.cookie,method:'POST',body:{pin:'111111'}})).status,401);
- const unlockMax=await api('/api/vault/unlock',{cookie:max.cookie,method:'POST',body:{pin:'482913'}});assert.equal(unlockMax.status,200);
- const maxVault=`${max.cookie}; ${vaultCookie(unlockMax)}`;assert.match(unlockMax.headers.get('set-cookie'),/HttpOnly/);
+ assert.equal((await api('/api/vault/unlock',{cookie:sam.cookie,method:'POST',body:{pin:'482913'}})).status,409,'Robin’s PIN doesn’t open it');
+ assert.equal((await api('/api/vault/unlock',{cookie:robin.cookie,method:'POST',body:{pin:'111111'}})).status,401);
+ const unlockRobin=await api('/api/vault/unlock',{cookie:robin.cookie,method:'POST',body:{pin:'482913'}});assert.equal(unlockRobin.status,200);
+ const maxVault=`${robin.cookie}; ${vaultCookie(unlockRobin)}`;assert.match(unlockRobin.headers.get('set-cookie'),/HttpOnly/);
  const hidden=await (await api('/api/vault/files',{cookie:maxVault,method:'POST',body:form('secret.png',png,'image/png')})).json();
  assert.equal((await api('/api/vault/files',{cookie:maxVault,method:'POST',body:form('fake.png','nope','image/png')})).status,400,'only real images');
  assert.equal((await api('/api/vault/file?id='+hidden.id,{cookie:maxVault})).headers.get('content-type'),'image/png');
  assert.deepEqual((await (await api('/api/vault',{cookie:maxVault})).json()).items.map(i=>i.id),[hidden.id]);
- assert.equal((await api('/api/vault/file?id='+hidden.id,{cookie:max.cookie})).status,403,'no vault cookie, no photo');
- assert.equal((await api('/api/files?id='+hidden.id+'&inline=1',{cookie:max.cookie})).status,404,'vault photos never come through the normal file link');
+ assert.equal((await api('/api/vault/file?id='+hidden.id,{cookie:robin.cookie})).status,403,'no vault cookie, no photo');
+ assert.equal((await api('/api/files?id='+hidden.id+'&inline=1',{cookie:robin.cookie})).status,404,'vault photos never come through the normal file link');
  assert.equal((await api('/api/files?id='+hidden.id+'&inline=1',{cookie:sam.cookie})).status,404,'not for the partner by id');
- assert.equal((await api('/api/vault/file?id='+hidden.id,{cookie:`${sam.cookie}; ${vaultCookie(unlockMax)}`})).status,403,"Max's unlock cookie does nothing for the partner (her own vault stays locked)");
- for(const who of [max,sam])assert.ok(!(await (await api('/api/files/geo',{cookie:who.cookie})).json()).photos.some(p=>p.id===hidden.id),'hidden photos never reach the shared map');
+ assert.equal((await api('/api/vault/file?id='+hidden.id,{cookie:`${sam.cookie}; ${vaultCookie(unlockRobin)}`})).status,403,"Robin's unlock cookie does nothing for the partner (her own vault stays locked)");
+ for(const who of [robin,sam])assert.ok(!(await (await api('/api/files/geo',{cookie:who.cookie})).json()).photos.some(p=>p.id===hidden.id),'hidden photos never reach the shared map');
  assert.equal((await api('/api/vault/files?id='+hidden.id,{cookie:maxVault,method:'DELETE'})).status,200);
  assert.equal((await (await api('/api/vault',{cookie:maxVault})).json()).items.length,0);
  assert.equal((await api('/api/vault/lock',{cookie:maxVault,method:'POST'})).status,200);
  assert.equal((await api('/api/vault',{cookie:maxVault})).status,403,'locked again');
- for(let i=0;i<5;i++)await api('/api/vault/unlock',{cookie:max.cookie,method:'POST',body:{pin:'999999'}});
- assert.equal((await api('/api/vault/unlock',{cookie:max.cookie,method:'POST',body:{pin:'482913'}})).status,429,'five wrong PINs lock it for a while');
+ for(let i=0;i<5;i++)await api('/api/vault/unlock',{cookie:robin.cookie,method:'POST',body:{pin:'999999'}});
+ assert.equal((await api('/api/vault/unlock',{cookie:robin.cookie,method:'POST',body:{pin:'482913'}})).status,429,'five wrong PINs lock it for a while');
 
  // memory map: GPS read from photo EXIF on upload; only photos you may open are listed
  const gpsJpeg=(lat,lng)=>{const t=Buffer.alloc(128);t.write('II',0,'latin1');t.writeUInt16LE(42,2);t.writeUInt32LE(8,4);t.writeUInt16LE(1,8);t.writeUInt16LE(0x8825,10);t.writeUInt16LE(4,12);t.writeUInt32LE(1,14);t.writeUInt32LE(26,18);t.writeUInt32LE(0,22);
@@ -172,29 +172,29 @@ try{
   ent(0,1,2,2,lat<0?'S':'N');ent(1,2,5,3,80);ent(2,3,2,2,lng<0?'W':'E');ent(3,4,5,3,104);t.writeUInt32LE(0,76);
   const dms=(v,o)=>{v=Math.abs(v);const d=Math.floor(v),m=Math.floor((v-d)*60),sec=Math.round(((v-d)*60-m)*60*1000);[[d,1],[m,1],[sec,1000]].forEach(([n,den],i)=>{t.writeUInt32LE(n,o+i*8);t.writeUInt32LE(den,o+i*8+4)})};dms(lat,80);dms(lng,104);
   const app1=Buffer.concat([Buffer.from([0xff,0xe1]),Buffer.from([0,0]),Buffer.from('Exif\0\0','latin1'),t]);app1.writeUInt16BE(app1.length-2,2);return Buffer.concat([Buffer.from([0xff,0xd8]),app1,Buffer.from([0xff,0xd9])])};
- const geoUp=await (await api('/api/files?shared=1',{cookie:max.cookie,method:'POST',body:form('lisbon.jpg',gpsJpeg(38.7223,-9.1393),'image/jpeg')})).json();
+ const geoUp=await (await api('/api/files?shared=1',{cookie:robin.cookie,method:'POST',body:form('lisbon.jpg',gpsJpeg(38.7223,-9.1393),'image/jpeg')})).json();
  // Uploads also report when a photo was taken (EXIF DateTimeOriginal), so a new memory can take its date
  {const t=Buffer.alloc(64);t.write('II',0,'latin1');t.writeUInt16LE(42,2);t.writeUInt32LE(8,4);t.writeUInt16LE(1,8);t.writeUInt16LE(0x8769,10);t.writeUInt16LE(4,12);t.writeUInt32LE(1,14);t.writeUInt32LE(26,18);
   t.writeUInt16LE(1,26);t.writeUInt16LE(0x9003,28);t.writeUInt16LE(2,30);t.writeUInt32LE(20,32);t.writeUInt32LE(44,36);t.write('2025:04:27 02:20:00\0',44,'latin1');
   const jpg=Buffer.concat([Buffer.from([0xff,0xd8,0xff,0xe1]),Buffer.from([0,t.length+8]),Buffer.from('Exif\0\0','latin1'),t,Buffer.from([0xff,0xd9])]);
-  const up=await (await api('/api/files?shared=1',{cookie:max.cookie,method:'POST',body:form('dated.jpg',jpg,'image/jpeg')})).json();assert.deepEqual(up.taken,{date:'2025-04-27',time:'02:20'});}
+  const up=await (await api('/api/files?shared=1',{cookie:robin.cookie,method:'POST',body:form('dated.jpg',jpg,'image/jpeg')})).json();assert.deepEqual(up.taken,{date:'2025-04-27',time:'02:20'});}
  assert.ok(geoUp.geo&&Math.abs(geoUp.geo.lat-38.7223)<1e-3&&Math.abs(geoUp.geo.lng+9.1393)<1e-3,'upload reports the GPS from EXIF');
- const privUp=await (await api('/api/files',{cookie:max.cookie,method:'POST',body:form('mine.jpg',gpsJpeg(12.97,77.59),'image/jpeg')})).json();
+ const privUp=await (await api('/api/files',{cookie:robin.cookie,method:'POST',body:form('mine.jpg',gpsJpeg(12.97,77.59),'image/jpeg')})).json();
  const samGeo=(await (await api('/api/files/geo',{cookie:sam.cookie})).json()).photos.map(p=>p.id);
  assert.ok(samGeo.includes(geoUp.id),'shared photos show on both maps');assert.ok(!samGeo.includes(privUp.id),"one person's unshared photos stay off the other's map");
- assert.ok((await (await api('/api/files/geo',{cookie:max.cookie})).json()).photos.some(p=>p.id===privUp.id));
+ assert.ok((await (await api('/api/files/geo',{cookie:robin.cookie})).json()).photos.some(p=>p.id===privUp.id));
  assert.equal((await api('/api/files/geo')).status,401);
- // moving a shared photo into Max's hidden photos (either partner can hide one from the shared journal)
- assert.equal((await api('/api/vault/move',{cookie:max.cookie,method:'POST',body:{id:'nope'}})).status,400);
- assert.equal((await api('/api/vault/move',{cookie:max.cookie,method:'POST',body:{id:geoUp.id}})).status,200);
- for(const who of [max,sam]){assert.equal((await api('/api/files?id='+geoUp.id+'&inline=1',{cookie:who.cookie})).status,404,'hidden photo leaves the shared link');assert.ok(!(await (await api('/api/files/geo',{cookie:who.cookie})).json()).photos.some(p=>p.id===geoUp.id),'and the map')}
- assert.equal((await api('/api/vault/move',{cookie:max.cookie,method:'POST',body:{id:geoUp.id}})).status,404,'already hidden');
+ // moving a shared photo into Robin's hidden photos (either partner can hide one from the shared journal)
+ assert.equal((await api('/api/vault/move',{cookie:robin.cookie,method:'POST',body:{id:'nope'}})).status,400);
+ assert.equal((await api('/api/vault/move',{cookie:robin.cookie,method:'POST',body:{id:geoUp.id}})).status,200);
+ for(const who of [robin,sam]){assert.equal((await api('/api/files?id='+geoUp.id+'&inline=1',{cookie:who.cookie})).status,404,'hidden photo leaves the shared link');assert.ok(!(await (await api('/api/files/geo',{cookie:who.cookie})).json()).photos.some(p=>p.id===geoUp.id),'and the map')}
+ assert.equal((await api('/api/vault/move',{cookie:robin.cookie,method:'POST',body:{id:geoUp.id}})).status,404,'already hidden');
 
  // M.A.X. coach: for everyone when the server has a model; streams the reply and knows today's progress
  assert.equal((await api('/api/coach/health',{cookie:sam.cookie})).status,200,'the partner has the coach too');
  assert.deepEqual(await (await api('/api/features',{cookie:sam.cookie})).json(),{vault:true,coach:true,coachOn:true});
- assert.deepEqual(await (await api('/api/coach/health',{cookie:max.cookie})).json(),{ok:true,available:true,loaded:true});
- const coach=await api('/api/coach/chat',{cookie:max.cookie,method:'POST',body:{messages:[{role:'user',content:'How am I doing?'}]}});
+ assert.deepEqual(await (await api('/api/coach/health',{cookie:robin.cookie})).json(),{ok:true,available:true,loaded:true});
+ const coach=await api('/api/coach/chat',{cookie:robin.cookie,method:'POST',body:{messages:[{role:'user',content:'How am I doing?'}]}});
  assert.equal(coach.status,200);const coachSse=await coach.text();assert.match(coachSse,/"type":"token"/);assert.match(coachSse,/"answer":"Nice work today."/);
  assert.equal(coachAuth,'Bearer test-key','the API key is sent');assert.equal(coachSeen.model,'test-model');assert.ok(!('id_slot' in coachSeen)&&!('cache_prompt' in coachSeen),'no llama.cpp-only fields for other APIs');
  const sys=coachSeen.messages[0];assert.equal(sys.role,'system');assert.match(sys.content,/coach inside/);assert.equal(extractSeen,null,'questions skip the logging pass');assert.match(sys.content,/TODAY:/);assert.match(sys.content,/Main goals: \d+ of \d+ done/);
@@ -204,23 +204,23 @@ try{
   assert.equal((await api('/api/profile/birthday',{cookie:sam.cookie,method:'PUT',body:{birthday:shiftDay(dayKey(),1)+'x'}})).status,400);
   assert.equal((await api('/api/profile/birthday',{cookie:sam.cookie,method:'PUT',body:{birthday:'2999-01-01'}})).status,400,'not in the future');
   const b=await (await api('/api/profile/birthday',{cookie:sam.cookie,method:'PUT',body:{birthday:`2002-${soon.slice(5)}`}})).json();assert.equal(b.user.birthday,`2002-${soon.slice(5)}`);
-  assert.equal((await (await api('/api/users',{cookie:max.cookie})).json()).users.find(u=>u.username==='sam').birthday,`2002-${soon.slice(5)}`,'the partner sees it');
-  await (await api('/api/coach/chat',{cookie:max.cookie,method:'POST',body:{messages:[{role:'user',content:'Anything coming up?'}]}})).text();
+  assert.equal((await (await api('/api/users',{cookie:robin.cookie})).json()).users.find(u=>u.username==='sam').birthday,`2002-${soon.slice(5)}`,'the partner sees it');
+  await (await api('/api/coach/chat',{cookie:robin.cookie,method:'POST',body:{messages:[{role:'user',content:'Anything coming up?'}]}})).text();
   assert.match(coachSeen.messages[0].content,/Coming up: .*Sam’s \d+\w\w birthday in 3 days/,'the coach knows a birthday is coming');}
- const kick=await api('/api/coach/chat',{cookie:max.cookie,method:'POST',body:{messages:[],kickoff:true}});await kick.text();assert.match(coachSeen.messages.at(-1).content,/Check in on me/,'M.A.X. opens the day');
+ const kick=await api('/api/coach/chat',{cookie:robin.cookie,method:'POST',body:{messages:[],kickoff:true}});await kick.text();assert.match(coachSeen.messages.at(-1).content,/Check in on me/,'M.A.X. opens the day');
  // It fills in the tracker: only items the message mentions (Dinner is dropped), reps and sets when said, and the reply knows
- const logged=await (await api('/api/coach/chat',{cookie:max.cookie,method:'POST',body:{messages:[{role:'user',content:'did 15 pushups x2 and had breakfast'}]}})).text();
+ const logged=await (await api('/api/coach/chat',{cookie:robin.cookie,method:'POST',body:{messages:[{role:'user',content:'did 15 pushups x2 and had breakfast'}]}})).text();
  assert.equal(extractSeen.id_slot,undefined,'llama.cpp slots only when talking to llama.cpp');assert.equal(extractSeen.model,'test-model');
  const logAct=JSON.parse(logged.split('\n\n').find(l=>l.includes('"type":"actions"')).slice(6));
  assert.deepEqual(logAct.actions.find(a=>a.goal==='body'),{goal:'body',check:[0],logs:{'0':{reps:15,sets:2}}});assert.ok(logAct.summary.some(x=>/Push-ups 15×2/.test(x)));assert.ok(!logAct.summary.join().includes('Dinner'),'unmentioned items are dropped');
  assert.match(coachSeen.messages[0].content,/Just logged from their message: .*Push-ups 15×2/);
- extractSeen=null;await (await api('/api/coach/chat',{cookie:max.cookie,method:'POST',body:{messages:[{role:'user',content:'gonna do squats later'}]}})).text();assert.equal(extractSeen,null,'plans are not logged');
- // The model calling Max "M.A.X." is fixed in the stream and the final answer
- const named=await (await api('/api/coach/chat',{cookie:max.cookie,method:'POST',body:{messages:[{role:'user',content:'name test'}]}})).text();
- assert.ok(!named.includes('M.A'),'no M.A.X. in the reply');assert.match(named,/"answer":"Great job Max keep going"/);
+ extractSeen=null;await (await api('/api/coach/chat',{cookie:robin.cookie,method:'POST',body:{messages:[{role:'user',content:'gonna do squats later'}]}})).text();assert.equal(extractSeen,null,'plans are not logged');
+ // The model calling the user "M.A.X." is fixed in the stream and the final answer
+ const named=await (await api('/api/coach/chat',{cookie:robin.cookie,method:'POST',body:{messages:[{role:'user',content:'name test'}]}})).text();
+ assert.ok(!named.includes('M.A'),'no M.A.X. in the reply');assert.match(named,/"answer":"Great job Robin keep going"/);
  // Every exchange is saved for History, by day: your message, what was logged, and the reply
- {const hist=await (await api('/api/coach/history',{cookie:max.cookie})).json();assert.ok(hist.days.length>=1);
-  const day=await (await api('/api/coach/history?day='+hist.days[0].day,{cookie:max.cookie})).json();
+ {const hist=await (await api('/api/coach/history',{cookie:robin.cookie})).json();assert.ok(hist.days.length>=1);
+  const day=await (await api('/api/coach/history?day='+hist.days[0].day,{cookie:robin.cookie})).json();
   assert.ok(day.entries.some(e=>e.role==='user'&&/15 pushups/.test(e.content)));assert.ok(day.entries.some(e=>e.role==='logged'&&/Push-ups 15×2/.test(e.content)));assert.ok(day.entries.some(e=>e.role==='assistant'));
   const theirs=await (await api('/api/coach/history',{cookie:sam.cookie})).json();assert.deepEqual(theirs.days,[],'the partner has their own (empty) history, never yours');}
  // Switching the coach off in Profile: no coach for that person; insight and advice come from their own numbers.
@@ -229,13 +229,13 @@ try{
   assert.equal((await api('/api/coach/health',{cookie:sam.cookie})).status,404,'coach switched off');
   assert.equal((await (await api('/api/features',{cookie:sam.cookie})).json()).coachOn,false);}
  // Right-now insight when the app opens: from the coach, or from their own numbers with the coach off
- {const i=await (await api('/api/insight',{cookie:max.cookie,method:'POST'})).json();assert.equal(i.source,'coach');assert.ok(i.text);
+ {const i=await (await api('/api/insight',{cookie:robin.cookie,method:'POST'})).json();assert.equal(i.source,'coach');assert.ok(i.text);
   const j=await (await api('/api/insight',{cookie:sam.cookie,method:'POST'})).json();assert.equal(j.source,'rules');assert.ok(j.text.length>10);}
  // Daily advice: Coach MAX writes it (pending until ready), the partner gets advice from her own numbers straight away
- {let a=await (await api('/api/advice',{cookie:max.cookie})).json();for(let i=0;i<20&&a.pending;i++){await new Promise(r=>setTimeout(r,100));a=await (await api('/api/advice',{cookie:max.cookie})).json()}
+ {let a=await (await api('/api/advice',{cookie:robin.cookie})).json();for(let i=0;i<20&&a.pending;i++){await new Promise(r=>setTimeout(r,100));a=await (await api('/api/advice',{cookie:robin.cookie})).json()}
   assert.equal(a.source,'coach');assert.ok(a.text.length>3);
   const p=await (await api('/api/advice',{cookie:sam.cookie})).json();assert.equal(p.source,'rules');assert.ok(p.text.length>20);}
- assert.equal((await api('/api/coach/chat',{cookie:max.cookie,method:'POST',body:{messages:[]}})).status,400);
+ assert.equal((await api('/api/coach/chat',{cookie:robin.cookie,method:'POST',body:{messages:[]}})).status,400);
  assert.equal((await api('/api/coach/chat',{method:'POST',body:{messages:[]}})).status,401,'needs a login');
 
  // Flexible goals, low-energy days, weekly recap and reminder targets
@@ -269,12 +269,12 @@ try{
  assert.equal(nextOccurrence({date:'2001-03-01',repeat:'yearly'},'2026-09-25'),'2027-03-01');
  assert.equal(nextOccurrence({date:'2000-02-29',repeat:'yearly'},'2026-09-25'),'2027-02-28');
  assert.deepEqual(upcoming([{id:'a',title:'Past',icon:'x',date:'2026-01-01',time:'',color:'pink'},{id:'b',title:'Trip',icon:'x',date:'2026-12-01',time:'',color:'pink'},{id:'c',title:'Bday',icon:'x',date:'1999-10-01',time:'',color:'pink',repeat:'yearly'}],'2026-09-25').map(x=>x.m.id),['c','b']);
- {const cur=await (await api('/api/shared',{cookie:max.cookie})).json();cur.shared.moments=[...cur.shared.moments,{id:'cd-1',title:'Her birthday',icon:'🎂',date:'2001-10-07',time:'',color:'pink',repeat:'yearly'}];
-  assert.equal((await api('/api/shared',{cookie:max.cookie,method:'PUT',body:{shared:cur.shared,revision:cur.revision}})).status,200);
+ {const cur=await (await api('/api/shared',{cookie:robin.cookie})).json();cur.shared.moments=[...cur.shared.moments,{id:'cd-1',title:'Her birthday',icon:'🎂',date:'2001-10-07',time:'',color:'pink',repeat:'yearly'}];
+  assert.equal((await api('/api/shared',{cookie:robin.cookie,method:'PUT',body:{shared:cur.shared,revision:cur.revision}})).status,200);
   assert.equal((await (await api('/api/shared',{cookie:sam.cookie})).json()).shared.moments.find(m=>m.id==='cd-1').repeat,'yearly','the yearly flag is kept');}
 
  // Couple stats: daily questions answered, out of the question pool
- {const st=await (await api('/api/daily/stats',{cookie:max.cookie})).json();assert.ok(st.total>0&&st.answered>=0&&st.questions<=st.total&&st.both>=0);assert.equal((await api('/api/daily/stats')).status,401);}
+ {const st=await (await api('/api/daily/stats',{cookie:robin.cookie})).json();assert.ok(st.total>0&&st.answered>=0&&st.questions<=st.total&&st.both>=0);assert.equal((await api('/api/daily/stats')).status,401);}
 
  // Export everything: a valid zip with data.json first and photos, never hidden-vault ones
  {const r=await api('/api/export',{cookie:sam.cookie});assert.equal(r.status,200);assert.match(r.headers.get('content-disposition'),/max-export-sam-/);
@@ -284,45 +284,45 @@ try{
   assert.equal((await api('/api/export')).status,401);}
 
  // Name and nickname: the nickname is what everyone sees; bad input is refused
- assert.equal((await api('/api/profile',{cookie:max.cookie,method:'PUT',body:{nickname:'   ',name:'Max Doe'}})).status,400);
- const prof=await (await api('/api/profile',{cookie:max.cookie,method:'PUT',body:{nickname:'  Maxi ',name:'Max Doe'}})).json();
- assert.deepEqual([prof.user.displayName,prof.user.name],['Maxi','Max Doe']);
- assert.equal((await (await api('/api/users',{cookie:sam.cookie})).json()).users.find(u=>u.username==='max').displayName,'Maxi','partner sees the nickname');
- await api('/api/profile',{cookie:max.cookie,method:'PUT',body:{nickname:'Max',name:'Max Doe'}});
+ assert.equal((await api('/api/profile',{cookie:robin.cookie,method:'PUT',body:{nickname:'   ',name:'Robin Doe'}})).status,400);
+ const prof=await (await api('/api/profile',{cookie:robin.cookie,method:'PUT',body:{nickname:'  Robbie ',name:'Robin Doe'}})).json();
+ assert.deepEqual([prof.user.displayName,prof.user.name],['Robbie','Robin Doe']);
+ assert.equal((await (await api('/api/users',{cookie:sam.cookie})).json()).users.find(u=>u.username==='robin').displayName,'Robbie','partner sees the nickname');
+ await api('/api/profile',{cookie:robin.cookie,method:'PUT',body:{nickname:'Robin',name:'Robin Doe'}});
 
  // Moods: saved with a time and note; the partner sees only the latest shared one, never private ones
- assert.equal((await api('/api/moods',{cookie:max.cookie,method:'POST',body:{mood:'nope'}})).status,400);
- const shared1=await (await api('/api/moods',{cookie:max.cookie,method:'POST',body:{mood:'tired',note:'long day',shared:true}})).json();
+ assert.equal((await api('/api/moods',{cookie:robin.cookie,method:'POST',body:{mood:'nope'}})).status,400);
+ const shared1=await (await api('/api/moods',{cookie:robin.cookie,method:'POST',body:{mood:'tired',note:'long day',shared:true}})).json();
  assert.equal(shared1.mood.mood,'tired');assert.ok(Math.abs(shared1.mood.at-Date.now())<60000);
- await new Promise(r=>setTimeout(r,5));await api('/api/moods',{cookie:max.cookie,method:'POST',body:{mood:'sad',note:'secret',shared:false}});
+ await new Promise(r=>setTimeout(r,5));await api('/api/moods',{cookie:robin.cookie,method:'POST',body:{mood:'sad',note:'secret',shared:false}});
  const moodSeen=await (await api('/api/moods',{cookie:sam.cookie})).json();
  assert.equal(moodSeen.partners[0].latest.mood,'tired','partner sees the latest shared mood');assert.ok(!JSON.stringify(moodSeen).includes('secret'),'private moods never reach the partner');
- const own=await (await api('/api/moods',{cookie:max.cookie})).json();assert.deepEqual(own.mine.map(m=>m.mood),['sad','tired']);
+ const own=await (await api('/api/moods',{cookie:robin.cookie})).json();assert.deepEqual(own.mine.map(m=>m.mood),['sad','tired']);
  assert.equal((await (await api('/api/moods?id='+shared1.mood.id,{cookie:sam.cookie,method:'DELETE'})).json()).deleted,0,'only your own moods can be deleted');
- assert.equal((await (await api('/api/moods?id='+shared1.mood.id,{cookie:max.cookie,method:'DELETE'})).json()).deleted,1);
+ assert.equal((await (await api('/api/moods?id='+shared1.mood.id,{cookie:robin.cookie,method:'DELETE'})).json()).deleted,1);
  assert.equal((await (await api('/api/moods',{cookie:sam.cookie})).json()).partners[0].latest,null);
 
  // Journal Recently deleted: both of you can bin items, stamped with your own name; the bin survives a round trip
  {const cur=await (await api('/api/shared',{cookie:sam.cookie})).json();
   const memory={id:'bin-memory',title:'Binned',body:'x',date:'2026-01-02',time:'',location:'',photos:[],author:'sam',created:new Date().toISOString(),comments:[{id:'bin-c',author:'sam',text:'hi',created:new Date().toISOString()}]};
   const put=(item)=>api('/api/shared',{cookie:sam.cookie,method:'PUT',body:{shared:{...cur.shared,journalTrash:[...(cur.shared.journalTrash??[]),item]},revision:cur.revision}});
-  assert.equal((await put({id:'bin-memory',kind:'memory',deletedAt:new Date().toISOString(),deletedBy:'max',memory})).status,403,'cannot bin in someone else’s name');
+  assert.equal((await put({id:'bin-memory',kind:'memory',deletedAt:new Date().toISOString(),deletedBy:'robin',memory})).status,403,'cannot bin in someone else’s name');
   assert.equal((await put({id:'bin-memory',kind:'memory',deletedAt:new Date().toISOString(),deletedBy:'sam',memory})).status,200);
-  const back=await (await api('/api/shared',{cookie:max.cookie})).json();assert.equal(back.shared.journalTrash.at(-1).memory.comments[0].text,'hi','the whole memory is kept in the bin');}
+  const back=await (await api('/api/shared',{cookie:robin.cookie})).json();assert.equal(back.shared.journalTrash.at(-1).memory.comments[0].text,'hi','the whole memory is kept in the bin');}
 
  // Recently deleted: either partner can bin photos (fresh timestamp, own name); delete forever only what's in the bin
- const binUp=await (await api('/api/files?shared=1',{cookie:max.cookie,method:'POST',body:form('bin.png',png,'image/png')})).json();
- const keepUp=await (await api('/api/files?shared=1',{cookie:max.cookie,method:'POST',body:form('keep.png',png,'image/png')})).json();
+ const binUp=await (await api('/api/files?shared=1',{cookie:robin.cookie,method:'POST',body:form('bin.png',png,'image/png')})).json();
+ const keepUp=await (await api('/api/files?shared=1',{cookie:robin.cookie,method:'POST',body:form('keep.png',png,'image/png')})).json();
  const putTrash=async(who,item)=>{const cur=await (await api('/api/shared',{cookie:who.cookie})).json();cur.shared.photoTrash=[...(cur.shared.photoTrash??[]),item];return (await api('/api/shared',{cookie:who.cookie,method:'PUT',body:{shared:cur.shared,revision:cur.revision}})).status};
- const binItem={id:binUp.id,name:'bin.png',size:binUp.size,deletedAt:new Date().toISOString(),deletedBy:'max'};
+ const binItem={id:binUp.id,name:'bin.png',size:binUp.size,deletedAt:new Date().toISOString(),deletedBy:'robin'};
  assert.equal(await putTrash(sam,binItem),403,'not in someone else’s name');
- assert.equal(await putTrash(max,{...binItem,deletedAt:new Date(Date.now()-10*86400000).toISOString()}),403,'no backdating into an instant purge');
- assert.equal(await putTrash(max,binItem),200);
+ assert.equal(await putTrash(robin,{...binItem,deletedAt:new Date(Date.now()-10*86400000).toISOString()}),403,'no backdating into an instant purge');
+ assert.equal(await putTrash(robin,binItem),200);
  assert.equal((await (await api('/api/files/purge',{cookie:sam.cookie,method:'POST',body:{ids:[keepUp.id]}})).json()).deleted,0,'the partner can’t purge what isn’t binned either');
- assert.equal((await (await api('/api/files/purge',{cookie:max.cookie,method:'POST',body:{ids:[keepUp.id]}})).json()).deleted,0,'only photos in Recently deleted');
- assert.equal((await api('/api/files?id='+keepUp.id+'&inline=1',{cookie:max.cookie})).status,200);
- assert.equal((await (await api('/api/files/purge',{cookie:max.cookie,method:'POST',body:{ids:[binUp.id]}})).json()).deleted,1);
- assert.equal((await api('/api/files?id='+binUp.id+'&inline=1',{cookie:max.cookie})).status,404,'deleted for good');
+ assert.equal((await (await api('/api/files/purge',{cookie:robin.cookie,method:'POST',body:{ids:[keepUp.id]}})).json()).deleted,0,'only photos in Recently deleted');
+ assert.equal((await api('/api/files?id='+keepUp.id+'&inline=1',{cookie:robin.cookie})).status,200);
+ assert.equal((await (await api('/api/files/purge',{cookie:robin.cookie,method:'POST',body:{ids:[binUp.id]}})).json()).deleted,1);
+ assert.equal((await api('/api/files?id='+binUp.id+'&inline=1',{cookie:robin.cookie})).status,404,'deleted for good');
 
  // body goal: direction-aware progress, weekly and monthly changes
  const gain=newBody(56,76,'2026-09-01');gain.entries.push({date:'2026-09-14',kg:56.4,weekly:true},{date:'2026-09-22',kg:57.1,weekly:true});
@@ -342,22 +342,22 @@ try{
 
 
  // push notifications: device registration (delivery itself needs a real phone)
- const {publicKey}=await (await api('/api/push/key',{cookie:max.cookie})).json();assert.ok(publicKey.length>80,'VAPID public key');
- assert.equal((await api('/api/push/test',{cookie:max.cookie,method:'POST'})).status,502,'no device yet');
- assert.equal((await api('/api/push/subscribe',{cookie:max.cookie,method:'POST',body:{subscription:{endpoint:'http://insecure.example/x',keys:{p256dh:'a',auth:'b'}}}})).status,400,'https endpoints only');
- assert.equal((await api('/api/push/subscribe',{cookie:max.cookie,method:'POST',body:{subscription:{endpoint:'https://push.example.test/abc',keys:{p256dh:'BPk',auth:'xyz'}}}})).status,200);
- assert.equal((await api('/api/push/unsubscribe',{cookie:max.cookie,method:'POST',body:{endpoint:'https://push.example.test/abc'}})).status,200);
+ const {publicKey}=await (await api('/api/push/key',{cookie:robin.cookie})).json();assert.ok(publicKey.length>80,'VAPID public key');
+ assert.equal((await api('/api/push/test',{cookie:robin.cookie,method:'POST'})).status,502,'no device yet');
+ assert.equal((await api('/api/push/subscribe',{cookie:robin.cookie,method:'POST',body:{subscription:{endpoint:'http://insecure.example/x',keys:{p256dh:'a',auth:'b'}}}})).status,400,'https endpoints only');
+ assert.equal((await api('/api/push/subscribe',{cookie:robin.cookie,method:'POST',body:{subscription:{endpoint:'https://push.example.test/abc',keys:{p256dh:'BPk',auth:'xyz'}}}})).status,200);
+ assert.equal((await api('/api/push/unsubscribe',{cookie:robin.cookie,method:'POST',body:{endpoint:'https://push.example.test/abc'}})).status,200);
  assert.equal((await api('/api/push/key')).status,401,'needs login');
 
  // logout ends that session only
- assert.equal((await api('/api/logout',{cookie:max.cookie,method:'POST'})).status,200);
- assert.equal((await api('/api/me',{cookie:max.cookie})).status,401);
+ assert.equal((await api('/api/logout',{cookie:robin.cookie,method:'POST'})).status,200);
+ assert.equal((await api('/api/me',{cookie:robin.cookie})).status,401);
  assert.equal((await api('/api/me',{cookie:sam.cookie})).status,200);
 
  // restart: sessions, trackers and the journal persist
  await stop();await start();
  assert.equal((await api('/api/me',{cookie:sam.cookie})).status,200);
- const again=await login('max',PASSWORDS.max);
+ const again=await login('robin',PASSWORDS.robin);
  const persisted=await (await api('/api/state',{cookie:again.cookie})).json();
  assert.equal(persisted.revision,1);assert.deepEqual(persisted.state.days[k].entries[0].exerciseLogs,{'0':{reps:12,sets:3}});assert.equal(complete(persisted.state.days[k].entries[0]),true);
  // And the server refuses it too: a logged past day sent back blank is kept, and the device is told to reload.
@@ -477,4 +477,4 @@ try{
  const badChoice=initialState();badChoice.goals.find(g=>g.id==='control').items=['Only one'];assert.equal((await api('/api/state',{cookie:again.cookie,method:'POST',body:badChoice})).status,400);
 
  console.log('PASS: accounts & hashed passwords, Tailscale gate, login/logout, stay-logged-in cookies, lockout, CSRF, per-account trackers, shared journal with conflict protection, private vs shared files, profile photos, restart persistence, history snapshots, streaks, choice and any-one goals, daily couple prompts, imported answer archive, memory comments, photo dump, cli avatars, streak freezes, hidden photos vault (per person), recently deleted, countdowns, moods, names & nicknames, export, flexible goals, low-energy days, weekly recap, reminders after partial logs & sleep fix, M.A.X. coach, memory map & photo GPS, body goals, push notifications & reminder rules, custom reminders & evening/daily nudges, per-person time zones, login photos.');
-}finally{if(child?.exitCode===null)await stop();fakeAssistant.close();rmSync(dataDir,{recursive:true,force:true})}
+}finally{if(child?.exitCode===null)await stop();fakeAssistant.close();try{rmSync(dataDir,{recursive:true,force:true,maxRetries:10,retryDelay:300})}catch(e){console.error('cleanup:',e.code,dataDir)}}

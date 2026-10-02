@@ -26,9 +26,9 @@ export function PhotoDump({photos,privacy,canVault,onClose,onSetSensitive,onAdd,
  const startHold=(p:DumpPhoto)=>{clearHold();hold.current.fired=false;hold.current.timer=setTimeout(()=>{hold.current.fired=true;hold.current.timer=null;navigator.vibrate?.(25);setSensitive(p,!p.sensitive)},HOLD_MS)};
  const tap=(p:DumpPhoto,i:number)=>{if(hold.current.fired){hold.current.fired=false;return}if(hidden(p))return reveal(p.id);setZoomAt(i)};
  const sensitiveCount=photos.filter(p=>p.sensitive).length;
- // Max only: move a photo into Hidden photos. It leaves the shared dump (and any memory) for both of you.
+ // Photo admins only: move a photo into Hidden photos. It leaves the shared dump (and any memory) for both of you.
  const [hiding,setHiding]=useState(false),[trashOpen,setTrashOpen]=useState(false);
- // Max only: delete goes to Recently deleted (restorable for 30 days), with an Undo right away.
+ // Photo admins only: delete goes to Recently deleted (restorable for 30 days), with an Undo right away.
  const remove=async(p:DumpPhoto,i:number)=>{if(!trash||!await confirmAction({title:'Delete this photo?',body:`It leaves the Photo Dump and its memories, and moves to Recently deleted for ${TRASH_DAYS} days.`}))return;trash.remove(p);setZoomAt(photos.length<=1?null:Math.min(i,photos.length-2));toast('Photo deleted',{description:'Moved to Recently deleted',duration:6000,action:{label:'Undo',onClick:()=>trash.restore([p.id])}})};
  const hide=async(p:DumpPhoto,i:number)=>{if(!onHide||hiding||!await confirmAction({title:'Move to Hidden photos?',body:'It disappears from the Photo Dump and memories for both of you, and only you can open it with your PIN.',action:'Move',danger:false}))return;setHiding(true);const ok=await onHide(p);setHiding(false);if(ok)setZoomAt(photos.length<=1?null:Math.min(i,photos.length-2))};
  return <Dialog open onOpenChange={v=>!v&&onClose()}><DialogContent className="journal-editor photo-dump" showCloseButton={false} onEscapeKeyDown={ev=>{if(zoomAt!==null){ev.preventDefault();setZoomAt(null)}}}>
