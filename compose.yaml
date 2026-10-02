@@ -1,0 +1,31 @@
+# docker compose up -d   (copy .env.example to .env first and fill it in)
+name: maximum-overdrive
+services:
+  max:
+    build: .
+    image: maximum-overdrive
+    container_name: maximum-overdrive
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      # Fixed inside the container (these win over .env); PORT in .env only changes the published port below.
+      PORT: "4317"
+      MAX_HOST: 0.0.0.0
+      MAX_DATA_DIR: /data
+      MAX_ORIGIN: ${MAX_ORIGIN:-http://localhost:4317}
+    ports:
+      # Loopback only: put a reverse proxy (Caddy, nginx, Tailscale) in front for HTTPS.
+      # Change to "4317:4317" to reach it from your network directly.
+      - "127.0.0.1:${PORT:-4317}:4317"
+    volumes:
+      - max-data:/data
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+volumes:
+  max-data:

@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
+      # End-to-end: real server processes, real SQLite databases, a fake model and an email outbox.
+      - run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t maximum-overdrive .
+      - name: Start the container and check it answers
+        run: |
+          docker run -d --name max -p 127.0.0.1:4317:4317 -e MAX_ORIGIN=http://localhost:4317 --read-only --tmpfs /tmp --cap-drop ALL maximum-overdrive
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:4317/health && exit 0; sleep 1; done
+          docker logs max; exit 1
