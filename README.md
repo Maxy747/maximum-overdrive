@@ -67,7 +67,8 @@ Accounts can also be managed on the server:
 node selfhost-dist/server.mjs set-password alex "Alex"
 ```
 
-Other commands: `list-users`, `set-avatar <username> <image>`, `restore-days <username> <backup.sqlite> <day>...`.
+Other commands: `list-users`, `disable-user`, `enable-user`, `set-role`, `delete-user <username> --yes`,
+`set-avatar <username> <image>`, `restore-days <username> <backup.sqlite> <day>...`.
 
 ## Configuration
 
@@ -83,12 +84,18 @@ The ones you're most likely to change:
 | `MAX_COACH_URL`, `MAX_COACH_API_KEY`, `MAX_COACH_MODEL_NAME` | (none) | The coach's model; see [docs/coach.md](docs/coach.md) |
 | `MAX_BASE_PATH` | (none) | Serve under a sub-path like `/max` |
 | `MAX_ALLOWED_LOGIN` | (none) | Only let these Tailscale identities reach the app |
+| `MAX_TRUST_PROXY` | (off) | Behind a reverse proxy: use the client's address for per-IP limits |
+| `MAX_USER_STORAGE_MB` | `1024` | Photos and files per account |
+
+Running a server for other people? See [docs/hosting.md](docs/hosting.md): settings, the built-in privacy policy
+and terms, account deletion and the admin commands.
 
 ## How accounts and privacy work
 
 - **Accounts:** sign up with a name, email and password, and confirm the email with a 6-digit code. Log in with email or
   username; reset a forgotten password by email. Passwords are hashed with scrypt; sessions are random tokens stored
-  hashed, in `HttpOnly`, `SameSite=Strict` cookies. Five wrong passwords lock that account's login for five minutes.
+  hashed, in `HttpOnly`, `SameSite=Strict` cookies. Five wrong passwords lock that account's login for five minutes,
+  and each IP address is limited too (sign-ups, failed logins, codes).
   Every change request must come from `MAX_ORIGIN`.
 - **Who sees what:** your tracker, your own journal, your hidden photos and your coach chats are only ever sent to
   you. Your partner sees the shared journal, the moods you mark as shared and your daily answers (after answering
@@ -96,6 +103,8 @@ The ones you're most likely to change:
   "Who's here?" account list, `MAX_ACCOUNT_PICKER`). This is enforced by the server and covered by the tests.
 - **Partner invites:** 8-character codes, single use, valid 48 hours, stored hashed, rate-limited. Leaving a partner
   hides the shared journal from both of you without deleting it; pairing again brings it back.
+- **Your data, your call:** download everything or delete your account (and everything that's only yours) from
+  Profile at any time.
 - **PIN locks:** hidden photos and (if you turn it on) your own journal need your PIN; an unlock lasts 15 minutes.
 - **What this doesn't protect against:** data is not encrypted at rest; anyone with access to the server's files can
   read it. The app keeps an offline copy of your data and recently seen photos in the browser, so a PIN protects

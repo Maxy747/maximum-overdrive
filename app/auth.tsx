@@ -10,7 +10,7 @@ import {forgetDevice,forgetUser,isOfflineError,lastUser,rememberUser} from './of
 
 type Account={username:string;displayName:string;avatarVersion?:string|null};
 // What this server allows (GET /api/config): 'setup' until the first account exists.
-export type Config={signup:'setup'|'open'|'invite'|'closed';email:boolean;picker:boolean;appName?:string};
+export type Config={signup:'setup'|'open'|'invite'|'closed';email:boolean;picker:boolean;appName?:string;legal?:{privacy:string;terms:string}};
 const accountPhoto=(a:Account)=>a.avatarVersion?`./api/accounts/avatar?u=${encodeURIComponent(a.username)}&v=${a.avatarVersion}`:undefined;
 
 export default function App(){
@@ -93,6 +93,7 @@ function Login({accounts,config,offline,onRetry,onLogin}:{accounts:Account[];con
   {(config.signup==='invite'||invite)&&<label className="field">{config.signup==='invite'?'Invite code':'Partner’s invite code'}<input name="invite" autoComplete="off" required maxLength={20} value={invite} onChange={e=>setInvite(e.target.value.toUpperCase())}/>{config.signup!=='invite'&&<span className="setting-hint">You’ll be partners once your account is ready. Already have an account? Log in instead.</span>}</label>}
   {messages}
   <button className="primary login-submit" disabled={busy}><UserPlus size={17}/>{busy?'Creating…':'Create account'}</button>
+  {config.legal&&<p className="login-legal">By creating an account you agree to the <a href={config.legal.terms} target="_blank" rel="noreferrer">terms</a> and the <a href={config.legal.privacy} target="_blank" rel="noreferrer">privacy policy</a>.</p>}
  </form>;
  else if(screen==='verify')body=<form className="login-form" onSubmit={e=>void verify(e)}>
   {back('login')}

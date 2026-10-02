@@ -15,7 +15,11 @@ max.example.com {
 
 ```bash
 MAX_ORIGIN=https://max.example.com
+MAX_TRUST_PROXY=1
 ```
+
+`MAX_TRUST_PROXY=1` lets the per-IP limits see the visitor's address through the proxy. Set it with any reverse proxy
+on the same machine, and only then.
 
 ## nginx
 

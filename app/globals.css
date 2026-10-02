@@ -1537,3 +1537,14 @@ html[data-splash=playing] .day-page.settle,html[data-splash=playing] .day-page.s
 .couple-stats-head h2{margin:0}
 .stat-card.recolor{outline:2px dashed var(--tone);outline-offset:3px}
 .couple-stats>.setting-hint{display:block;margin:-4px 0 14px}
+
+/* Profile: account (storage, policies, delete). */
+.account-controls{display:flex;flex-direction:column;gap:12px;align-items:flex-start}
+.storage-line{display:flex;flex-direction:column;gap:8px;width:100%}
+.storage-bar{display:block;width:100%;height:6px;border-radius:99px;background:#26222e;overflow:hidden}
+.storage-bar i{display:block;height:100%;background:linear-gradient(90deg,#a88aff,#ff8fbf);border-radius:inherit}
+.danger-btn{color:#ffb3c1;border-color:#ff5c7a55}
+.danger-btn:hover{background:#ff5c7a1a;border-color:#ff5c7a}
+.danger-primary{background:#ff5c7a!important;border-color:#ff5c7a!important;color:#1a0b10!important}
+.login-legal{margin:0;font-size:12.5px;color:#a49bb5;text-align:center}
+.login-legal a{color:#c1a0ff}
