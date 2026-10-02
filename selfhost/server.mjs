@@ -16,7 +16,8 @@ import {promptFor,dailyQuestions} from '../lib/daily';
 import {timingFacts,itemTiming,itemsOf,windowFor} from '../lib/timing';
 import {blankDay} from '../app/offline';
 import {jpegGps,jpegTaken} from './exif.mjs';
-import {createAccounts} from './accounts.mjs';
+import {createAccounts,migrateUsers} from './accounts.mjs';
+import {privacyPage,termsPage} from './legal.mjs';
 import {createSpaces} from './spaces.mjs';
 import webpush from 'web-push';
 // A slow network can take ~0.8 s to open a connection to Apple's push service; Node's default of 250 ms per address
@@ -61,7 +62,33 @@ async function readPasswords(){
  const ask=prompt=>new Promise((done,fail)=>{let value='';process.stdout.write(prompt);stdin.setRawMode(true);stdin.resume();stdin.setEncoding('utf8');const onData=text=>{for(const c of text){if(c==='\r'||c==='\n'){stdin.setRawMode(false);stdin.pause();stdin.off('data',onData);process.stdout.write('\n');return done(value)}if(c==='\u0003'){stdin.setRawMode(false);process.stdout.write('\n');return fail(Error('Cancelled.'))}if(c==='\u007f'||c==='\b')value=value.slice(0,-1);else value+=c}};stdin.on('data',onData)});
  return [await ask('New password: '),await ask('Repeat password: ')];
 }
+// Deletes an account and everything that's only theirs: tracker, own journal, files (also on disk), hidden photos, moods,
+// coach chats, daily answers, push devices, PINs, sessions. A shared journal they're in moves to the partner
+// (selfhost/spaces.mjs removeUser). Returns {partner} when there was one.
+function deleteAccount(username){
+ const has=t=>!!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(t);
+ if(!db.prepare('SELECT 1 FROM users WHERE username=?').get(username))throw Error(`No account called ${username}.`);
+ let result,files;
+ db.exec('BEGIN IMMEDIATE');
+ try{
+  result=spaces.removeUser(username);
+  files=db.prepare('SELECT id FROM files WHERE user_id=?').all(username).map(r=>r.id);
+  for(const id of files)db.prepare('DELETE FROM files WHERE id=?').run(id);// vault_items and file_geo go with them
+  for(const t of ['moods','coach_advice','coach_log','daily_archive','push_subs'])if(has(t))db.prepare(`DELETE FROM ${t} WHERE username=?`).run(username);
+  if(has('vault_items'))db.prepare('DELETE FROM vault_items WHERE added_by=?').run(username);
+  if(has('email_codes'))db.prepare('DELETE FROM email_codes WHERE username=?').run(username);
+  db.prepare('DELETE FROM trackers WHERE user_id=?').run(username);
+  db.prepare('DELETE FROM app_kv WHERE key IN (?,?)').run('vault_pin:'+username,'mine_lock:'+username);
+  const wasAdmin=db.prepare('SELECT role FROM users WHERE username=?').get(username)?.role==='admin';
+  db.prepare('DELETE FROM users WHERE username=?').run(username);// sessions, daily answers and invites go with it
+  if(wasAdmin&&!db.prepare("SELECT 1 FROM users WHERE role='admin'").get())db.prepare("UPDATE users SET role='admin' WHERE rowid=(SELECT MIN(rowid) FROM users)").run();
+  db.exec('COMMIT');
+ }catch(e){try{db.exec('ROLLBACK')}catch{}throw e}
+ for(const id of files)try{unlinkSync(join(base,'files',id))}catch{}
+ return result;
+}
 async function cli(command,args){
+ migrateUsers(db);
  if(command==='set-password'){
   const username=String(args[0]||'').toLowerCase();if(!validUsername(username))throw Error('Usage: node server.mjs set-password <username> [Display Name]  (username: 2-32 of a-z 0-9 _ -)');
   const [password,repeat]=await readPasswords();
@@ -92,7 +119,24 @@ async function cli(command,args){
   if(user.avatar&&/^[-a-f0-9]{36}$/.test(user.avatar)){db.prepare('DELETE FROM files WHERE id=? AND user_id=?').run(user.avatar,username);try{unlinkSync(join(base,'files',user.avatar))}catch{}}
   return console.log(`Profile photo set for ${username}.`);
  }
- if(command==='list-users'){const rows=db.prepare('SELECT username,display_name FROM users ORDER BY username').all();return console.log(rows.length?rows.map(r=>`${r.username}\t${r.display_name}`).join('\n'):'No accounts yet.')}
+ if(command==='list-users'){
+  const rows=db.prepare("SELECT u.username,u.display_name AS name,COALESCE(u.email,'') AS email,u.role,u.email_verified AS verified,u.disabled,u.created,(SELECT COALESCE(SUM(size),0) FROM files f WHERE f.user_id=u.username) AS bytes FROM users u ORDER BY u.rowid").all();
+  if(!rows.length)return console.log('No accounts yet.');
+  return console.log(['username\tname\temail\trole\tstatus\tstorage\tcreated',...rows.map(r=>[r.username,r.name,r.email,r.role,r.disabled?'disabled':r.email&&!r.verified?'unconfirmed':'active',`${(r.bytes/1e6).toFixed(1)} MB`,r.created?new Date(r.created).toISOString().slice(0,10):''].join('\t'))].join('\n'));
+ }
+ if(command==='disable-user'||command==='enable-user'){
+  const username=String(args[0]||'').toLowerCase();if(!db.prepare('SELECT 1 FROM users WHERE username=?').get(username))throw Error(`Usage: node server.mjs ${command} <username>`);
+  const off=command==='disable-user';db.prepare('UPDATE users SET disabled=? WHERE username=?').run(off?1:0,username);if(off)db.prepare('DELETE FROM sessions WHERE username=?').run(username);
+  return console.log(off?`${username} is disabled and signed out everywhere.`:`${username} can log in again.`);
+ }
+ if(command==='set-role'){
+  const [username,role]=[String(args[0]||'').toLowerCase(),String(args[1]||'')];if(!['admin','member'].includes(role)||!db.prepare('SELECT 1 FROM users WHERE username=?').get(username))throw Error('Usage: node server.mjs set-role <username> admin|member');
+  db.prepare('UPDATE users SET role=? WHERE username=?').run(role,username);return console.log(`${username} is now ${role==='admin'?'an admin':'a member'}.`);
+ }
+ if(command==='delete-user'){
+  const username=String(args[0]||'').toLowerCase();if(!username||args[1]!=='--yes')throw Error('Usage: node server.mjs delete-user <username> --yes   (deletes the account and everything that is only theirs; a shared journal moves to their partner)');
+  const r=deleteAccount(username);return console.log(`Deleted ${username}.${r?.partner?` Their shared journal now belongs to ${r.partner}.`:''}`);
+ }
  if(command==='migrate-owner'){
   const [from,to]=[String(args[0]||''),String(args[1]||'').toLowerCase()];if(!from||!validUsername(to))throw Error('Usage: node server.mjs migrate-owner <old-owner-id> <username>');
   if(db.prepare('SELECT 1 FROM trackers WHERE user_id=?').get(to))throw Error(`${to} already has tracker data; refusing to overwrite it.`);
@@ -114,7 +158,7 @@ async function cli(command,args){
   db.prepare('UPDATE trackers SET data=?,revision=revision+1 WHERE user_id=?').run(JSON.stringify(valid.data),username);
   return console.log(`Restored ${done.join(', ')} for ${username} (revision ${row.revision} -> ${row.revision+1}).`);
  }
- throw Error('Commands: set-password <username> [Display Name] | set-passwords <username>... | set-avatar <username> <image> | list-users | migrate-owner <old-owner-id> <username> | restore-days <username> <backup.sqlite> <day>...');
+ throw Error('Commands: set-password <username> [Display Name] | set-passwords <username>... | set-avatar <username> <image> | list-users | disable-user <username> | enable-user <username> | set-role <username> admin|member | delete-user <username> --yes | migrate-owner <old-owner-id> <username> | restore-days <username> <backup.sqlite> <day>...');
 }
 if(process.argv[2]){try{await cli(process.argv[2],process.argv.slice(3));db.close();process.exit(0)}catch(e){console.error(e.message);db.close();process.exit(1)}}
 
@@ -129,6 +173,19 @@ const basePath=(process.env.MAX_BASE_PATH||'').replace(/\/$/,'');
 // The coach also needs a model (selfhost/coach.mjs), and each person can switch it off in Profile.
 const FEATURES=new Set((process.env.MAX_FEATURES??'vault,coach').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean));
 const vaultOn=()=>FEATURES.has('vault');
+// Photos and files per account: MAX_USER_STORAGE_MB (default 1024; 0 = no limit).
+const STORAGE_LIMIT=Math.max(0,Number(process.env.MAX_USER_STORAGE_MB??1024)||0)*1e6;
+const usedBytes=username=>db.prepare('SELECT COALESCE(SUM(size),0) AS n FROM files WHERE user_id=?').get(username).n;
+const overQuota=(username,bytes)=>STORAGE_LIMIT>0&&usedBytes(username)+bytes>STORAGE_LIMIT;
+const quotaFull=res=>json(res,413,{error:`You've used your ${Math.round(STORAGE_LIMIT/1e6)} MB of storage. Delete some photos (and empty Recently deleted) to add more.`});
+// Behind a reverse proxy, MAX_TRUST_PROXY=1 makes per-IP limits use the client's address from X-Forwarded-For.
+const trustProxy=process.env.MAX_TRUST_PROXY==='1';
+// Privacy policy and terms: the built-in pages (selfhost/legal.mjs), or your own (MAX_PRIVACY_URL, MAX_TERMS_URL).
+const legalLinks={privacy:process.env.MAX_PRIVACY_URL||'./privacy',terms:process.env.MAX_TERMS_URL||'./terms'};
+const legalConfig=()=>{const host=u=>{try{return new URL(u).hostname}catch{return ''}},coach=FEATURES.has('coach')?host(process.env.MAX_COACH_URL||''):'';
+ return {appName:'Maximum Overdrive',operator:process.env.MAX_OPERATOR||'',contact:process.env.MAX_CONTACT_EMAIL||'',origin:origin??'',smtpHost:host(process.env.MAX_SMTP_URL||''),
+  coachHost:coach&&!['localhost','127.0.0.1','::1'].includes(coach)?coach:'',coachLocal:FEATURES.has('coach')&&(!!process.env.MAX_COACH_LLAMA_SERVER||['localhost','127.0.0.1','::1'].includes(coach)),
+  storageMb:Math.round(STORAGE_LIMIT/1e6),trashDays:TRASH_DAYS,unverifiedHours:48,backupDays:Number(process.env.MAX_BACKUP_DAYS)||0,minAge:Number(process.env.MAX_MIN_AGE)||16,updated:'October 3, 2026'}};
 const coachFor=username=>FEATURES.has('coach')&&trackerOf(username)?.settings?.coach!==false;
 if(basePath&&!/^\/[a-z0-9-]+$/.test(basePath))throw Error('Invalid MAX_BASE_PATH');
 
@@ -266,7 +323,7 @@ setTimeout(()=>void snapshot(),60000).unref();setInterval(()=>void snapshot(),15
 const COOKIE='max_session',REMEMBER_SECONDS=180*86400,SESSION_SECONDS=86400;
 const tokenHash=token=>createHash('sha256').update(token).digest('hex');
 function readCookie(req,name){for(const part of String(req.headers.cookie||'').split(';')){const i=part.indexOf('=');if(i>0&&part.slice(0,i).trim()===name)return part.slice(i+1).trim()}return ''}
-function currentUser(req){const token=readCookie(req,COOKIE);if(!/^[a-f0-9]{64}$/.test(token))return null;return db.prepare('SELECT u.username,u.display_name AS displayName,u.full_name AS name,u.avatar,u.birthday FROM sessions s JOIN users u ON u.username=s.username WHERE s.token_hash=? AND s.expires>?').get(tokenHash(token),Date.now())??null}
+function currentUser(req){const token=readCookie(req,COOKIE);if(!/^[a-f0-9]{64}$/.test(token))return null;return db.prepare('SELECT u.username,u.display_name AS displayName,u.full_name AS name,u.avatar,u.birthday FROM sessions s JOIN users u ON u.username=s.username WHERE s.token_hash=? AND s.expires>? AND u.disabled=0').get(tokenHash(token),Date.now())??null}
 const cookieHeader=(value,maxAge)=>`${COOKIE}=${value}; Path=${basePath}/; HttpOnly; SameSite=Strict${secureCookie?'; Secure':''}${maxAge==null?'':`; Max-Age=${maxAge}`}`;
 const pruneSessions=()=>db.prepare('DELETE FROM sessions WHERE expires<=?').run(Date.now());
 pruneSessions();setInterval(pruneSessions,3600000).unref();
@@ -401,6 +458,9 @@ const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=
 const gatePage='<!doctype html><html><meta name="viewport" content="width=device-width"><title>Maximum Overdrive</title><body style="background:#100e18;color:#ede3ff;font:18px system-ui;padding:10vw"><h1>Maximum Overdrive</h1><p>This is a private space.</p><p>Connect Tailscale on your phone or computer, then reopen this link.</p></body></html>';
 
 const accounts=createAccounts({db,dev,json,readJson,hashPassword,verifyPassword,dummyHash:DUMMY_HASH,validUsername,isLocked,recordFailure,clearFailures:name=>failures.delete(name),startSession,publicUser,picker:accountPicker,
+ endSession:res=>res.setHeader('Set-Cookie',[cookieHeader('',0),vaultCookie('',0)]),legal:legalLinks,trustProxy,
+ storageOf:username=>({used:usedBytes(username),limit:STORAGE_LIMIT||null}),
+ onDeleteAccount:username=>{deleteAccount(username);for(const [k,v] of vaultSessions)if(v.username===username)vaultSessions.delete(k)},
  checkInvite:spaces.checkInvite,rememberInvite:spaces.rememberInvite,onReady:spaces.onAccountReady});
 
 // ---------- server ----------
@@ -411,6 +471,10 @@ const server=createServer(async(req,res)=>{
  if(basePath&&url.pathname===basePath){res.writeHead(308,{Location:basePath+'/'});return res.end()}
  if(basePath&&url.pathname.startsWith(basePath+'/'))url.pathname=url.pathname.slice(basePath.length);
  if(url.pathname==='/health'&&req.method==='GET')return json(res,200,{ok:true});
+  if((url.pathname==='/privacy'||url.pathname==='/terms')&&req.method==='GET'){
+   const own=url.pathname==='/privacy'?process.env.MAX_PRIVACY_URL:process.env.MAX_TERMS_URL;if(own){res.writeHead(302,{Location:own});return res.end()}
+   res.writeHead(200,{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store'});return res.end((url.pathname==='/privacy'?privacyPage:termsPage)(legalConfig()));
+  }
  // Optional network gate: only the listed Tailscale identities may reach the app at all.
  if(!dev&&tailnetLogins.length&&!tailnetLogins.includes(String(req.headers['tailscale-user-login']||'').toLowerCase())){
   if(url.pathname.startsWith('/api/'))return json(res,401,{error:'Connect using Tailscale to open MAX.'});
@@ -529,6 +593,7 @@ const server=createServer(async(req,res)=>{
   if(url.pathname==='/api/profile/avatar'&&req.method==='POST'){
    const file=await readUpload(req,5000000);if(!file)return json(res,400,{error:'Choose a photo smaller than 5 MB.'});
    const bytes=Buffer.from(await file.arrayBuffer());if(!imageType(bytes))return json(res,400,{error:'Choose a JPEG, PNG, WebP, GIF or AVIF photo.'});
+   if(overQuota(user.username,bytes.length))return quotaFull(res);
    const id=storeFile(user.username,file.name||'avatar',bytes,true),old=user.avatar;
    db.prepare('UPDATE users SET avatar=? WHERE username=?').run(id,user.username);
    if(old&&/^[-a-f0-9]{36}$/.test(old)){db.prepare('DELETE FROM files WHERE id=? AND user_id=?').run(old,user.username);try{unlinkSync(join(base,'files',old))}catch{}}
@@ -641,6 +706,7 @@ const server=createServer(async(req,res)=>{
    if(url.pathname==='/api/vault/files'&&req.method==='POST'){
     const file=await readUpload(req,10000000);if(!file)return json(res,400,{error:'Choose a photo smaller than 10 MB.'});
     const bytes=Buffer.from(await file.arrayBuffer());if(!imageType(bytes))return json(res,400,{error:'Choose a JPEG, PNG, WebP, GIF or AVIF photo.'});
+    if(overQuota(user.username,bytes.length))return quotaFull(res);
     const id=storeFile(user.username,file.name||'hidden',bytes,false,true),created=new Date().toISOString();
     db.prepare('INSERT INTO vault_items(id,added_by,created) VALUES(?,?,?)').run(id,user.username,created);
     return json(res,200,{id,name:file.name.slice(0,150),size:bytes.length,addedBy:user.username,created});
@@ -774,7 +840,7 @@ const server=createServer(async(req,res)=>{
   }
   if(url.pathname==='/api/files/geo'&&req.method==='GET')return json(res,200,{photos:visibleGeo(user.username,lockedSpace(req,user.username))});
   if(url.pathname==='/api/files'){
-   if(req.method==='POST'){const file=await readUpload(req,10000000);if(!file)return json(res,400,{error:'Choose a file smaller than 10 MB.'});const bytes=Buffer.from(await file.arrayBuffer()),id=storeFile(user.username,file.name,bytes,url.searchParams.get('shared')==='1',false,url.searchParams.get('space')==='mine'?spaces.personalOf(user.username):spaces.spaceOf(user.username)),g=db.prepare('SELECT lat,lng FROM file_geo WHERE id=? AND lat IS NOT NULL').get(id),taken=jpegTaken(bytes);return json(res,200,{id,name:file.name.slice(0,150),size:bytes.length,...(g?{geo:{lat:g.lat,lng:g.lng}}:{}),...(taken?{taken}:{})})}
+   if(req.method==='POST'){const file=await readUpload(req,10000000);if(!file)return json(res,400,{error:'Choose a file smaller than 10 MB.'});const bytes=Buffer.from(await file.arrayBuffer());if(overQuota(user.username,bytes.length))return quotaFull(res);const id=storeFile(user.username,file.name,bytes,url.searchParams.get('shared')==='1',false,url.searchParams.get('space')==='mine'?spaces.personalOf(user.username):spaces.spaceOf(user.username)),g=db.prepare('SELECT lat,lng FROM file_geo WHERE id=? AND lat IS NOT NULL').get(id),taken=jpegTaken(bytes);return json(res,200,{id,name:file.name.slice(0,150),size:bytes.length,...(g?{geo:{lat:g.lat,lng:g.lng}}:{}),...(taken?{taken}:{})})}
    if(req.method==='GET'){
     const id=url.searchParams.get('id');if(!id||!/^[-a-f0-9]{36}$/.test(id))return json(res,400,{error:'Invalid file.'});
     const circle=spaces.circleOf(user.username).map(u=>u.avatar).filter(Boolean);

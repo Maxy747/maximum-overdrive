@@ -107,6 +107,34 @@ export function createSpaces({db,json,readJson,publicUser,notify=()=>{}}){
  }
  const rememberInvite=(username,code)=>db.prepare('UPDATE users SET pending_invite=? WHERE username=?').run(normalizeCode(code),username);
 
+ /** Account deletion, the journal side. Your own journal goes. A shared journal you're in now moves into your partner's
+  *  own journal (memories, countdowns, diary, photos), so they keep it; past shared journals (from before you left a
+  *  partner) go, and the other person's photos in them become private to that person. Deleting your files is the
+  *  caller's job; this re-homes the files in a current shared journal (yours included) to the partner. */
+ function removeUser(username){
+  const doc=id=>{try{return JSON.parse(db.prepare('SELECT data FROM shared WHERE id=?').get(id)?.data??'null')}catch{return null}};
+  const couple=coupleOf(username),partner=partnerOf(username),own=db.prepare('SELECT space_id FROM users WHERE username=?').get(username)?.space_id;
+  let kept=null;
+  if(couple&&partner){
+   const into=personalOf(partner),from=doc(couple);
+   if(from){
+    const to=doc(into)??{journal:[],moments:[]},ids=new Set((to.moments??[]).map(m=>m.id));
+    const merged={...to,journal:[...(to.journal??[]),...(from.journal??[])],moments:[...(to.moments??[]),...(from.moments??[]).filter(m=>!ids.has(m.id))].slice(0,100),
+     diary:[...(to.diary??[]),...(from.diary??[])],photoDump:[...(to.photoDump??[]),...(from.photoDump??[])],...(from.together&&!to.together?{together:from.together}:{})};
+    db.prepare('INSERT INTO shared(id,data,revision) VALUES(?,?,1) ON CONFLICT(id) DO UPDATE SET data=excluded.data,revision=shared.revision+1').run(into,JSON.stringify(merged));
+   }
+   // Everything shared into the couple's journal, including your uploads, now belongs to the partner's own journal.
+   db.prepare('UPDATE files SET space_id=?,user_id=? WHERE space_id=?').run(into,partner,couple);
+   db.prepare('UPDATE users SET couple_id=NULL WHERE username=?').run(partner);
+   kept=partner;
+  }
+  // Every shared journal you were ever part of, and your own: gone. Others' photos in them stay theirs, privately.
+  const ids=db.prepare('SELECT id FROM spaces WHERE a=? OR b=? OR id=?').all(username,username,own??'').map(r=>r.id);
+  for(const id of ids){db.prepare('UPDATE files SET space_id=NULL,shared=0 WHERE space_id=? AND user_id<>?').run(id,username);db.prepare('DELETE FROM shared WHERE id=?').run(id);db.prepare('DELETE FROM spaces WHERE id=?').run(id)}
+  db.prepare('DELETE FROM invites WHERE from_user=? OR used_by=?').run(username,username);
+  return {partner:kept};
+ }
+
  // ----- routes (signed in) -----
  const tries=new Map();
  const tooMany=username=>{const now=Date.now(),list=(tries.get(username)??[]).filter(t=>now-t<TRY_WINDOW);tries.set(username,list);return list.length>=TRIES};
@@ -134,5 +162,5 @@ export function createSpaces({db,json,readJson,publicUser,notify=()=>{}}){
   return false;
  }
 
- return {spaceOf,spaceFor,spacesOf,personalOf,coupleOf,partnerOf,isCouple,circleOf,checkInvite,rememberInvite,onAccountReady,handle};
+ return {spaceOf,spaceFor,spacesOf,personalOf,coupleOf,partnerOf,isCouple,circleOf,checkInvite,rememberInvite,onAccountReady,removeUser,handle};
 }
